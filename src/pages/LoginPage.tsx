@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import bprLogo from '@/assets/bpr-logo.png';
-import bankingBg from '@/assets/banking-bg.jpg';
+import bankingBg from '@/assets/bg-login.png';
 
 export default function LoginPage() {
     const { login } = useAuth();
@@ -43,15 +43,15 @@ export default function LoginPage() {
 
                 {/* Konten di atas overlay */}
                 <div className="relative z-10 flex flex-col items-center gap-6 text-center px-12">
-                    <img
+                    {/* <img
                         src={bprLogo}
                         alt="BPR Perdana Logo"
                         className="w-40 h-40 object-contain drop-shadow-2xl"
-                    />
+                    /> */}
                     <div>
-                        <h1 className="text-4xl font-bold text-white drop-shadow-lg mb-3">
+                        {/* <h1 className="text-4xl font-bold text-white drop-shadow-lg mb-3">
                             BPR Perdana
-                        </h1>
+                        </h1> */}
                         <p className="text-white/85 text-lg max-w-sm leading-relaxed">
                             Internal Dashboard untuk pengelolaan pengajuan eForm nasabah.
                         </p>
