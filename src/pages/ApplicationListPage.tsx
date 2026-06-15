@@ -22,6 +22,7 @@ const STATUS_LABEL: Record<AppStatus, string> = {
     PENDING_REVIEW: 'Menunggu Review',
     IN_REVIEW: 'Dalam Review',
     RECOMMENDED: 'Direkomendasikan',
+    FRAUD_REJECTED: 'Gagal Verifikasi KYC', // ← tambah
     APPROVED: 'Disetujui',
     REJECTED: 'Ditolak',
     SIGNING: 'Penandatanganan',
@@ -39,6 +40,7 @@ const STATUS_COLOR: Record<AppStatus, string> = {
     SIGNING: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
     COMPLETED: 'bg-teal-500/10 text-teal-600 border-teal-500/20',
     EXPIRED: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+    FRAUD_REJECTED: 'bg-destructive/10 text-destructive border-destructive/20',
 };
 
 const PRODUCT_LABEL: Record<ProductType, string> = {

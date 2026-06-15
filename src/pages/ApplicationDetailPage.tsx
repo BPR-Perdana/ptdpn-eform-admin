@@ -25,17 +25,43 @@ import { formatDateTime, formatCurrency, formatDateOnly } from '@/lib/utils';
 import {
   ArrowLeft, CheckCircle2, XCircle, ThumbsUp, FolderOpen,
   MessageSquarePlus, Loader2, Shield, User, Phone, Mail,
-  MapPin, Banknote, Package, Calendar, FileText
+  MapPin, Banknote, Package, Calendar, FileText, AlertTriangle,
+  Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─── Lookup tables ────────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<AppStatus, string> = {
-  DRAFT: 'Draft', PENDING_REVIEW: 'Menunggu Review', IN_REVIEW: 'Dalam Review',
-  RECOMMENDED: 'Direkomendasikan', APPROVED: 'Disetujui', REJECTED: 'Ditolak',
-  SIGNING: 'Penandatanganan', COMPLETED: 'Selesai', EXPIRED: 'Kedaluwarsa',
+  DRAFT:          'Draft',
+  PENDING_REVIEW: 'Menunggu Review',
+  IN_REVIEW:      'Dalam Review',
+  RECOMMENDED:    'Direkomendasikan',
+  FRAUD_REJECTED: 'Gagal Verifikasi KYC',  // ← tambah
+  APPROVED:       'Disetujui',
+  REJECTED:       'Ditolak',
+  SIGNING:        'Menunggu TTD',
+  COMPLETED:      'Selesai',
+  EXPIRED:        'Kedaluwarsa',
 };
+
+const FRAUD_STATUS_LABEL: Record<string, string> = {
+    '001': 'Sedang Diproses',
+    '002': 'Menunggu Review Manual',
+    '003': 'Disetujui',
+    '004': 'Ditolak',
+    '006': 'Sertifikat Tidak Diterbitkan',
+    '007': 'Sertifikat Diterbitkan',
+}
+
+const FRAUD_STATUS_COLOR: Record<string, string> = {
+    '001': 'text-muted-foreground',
+    '002': 'text-warning',
+    '003': 'text-success',
+    '004': 'text-destructive',
+    '006': 'text-destructive',
+    '007': 'text-success',
+}
 
 const STATUS_COLOR: Record<AppStatus, string> = {
   DRAFT: 'bg-muted text-muted-foreground',
@@ -47,6 +73,7 @@ const STATUS_COLOR: Record<AppStatus, string> = {
   SIGNING: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
   COMPLETED: 'bg-teal-500/10 text-teal-600 border-teal-500/20',
   EXPIRED: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  FRAUD_REJECTED: 'bg-destructive/10 text-destructive border-destructive/20',
 };
 
 const PRODUCT_LABEL: Record<ProductType, string> = {
@@ -159,6 +186,13 @@ export default function ApplicationDetailPage() {
     queryKey: ['application', id],
     queryFn: () => getApplicationDetail(id!),
     enabled: !!id,
+    refetchInterval: (data) => {
+        const fraudStatus = data?.liveness_result?.fraud_status
+        if (fraudStatus === '001' || fraudStatus === '002') {
+            return 30_000 // refresh tiap 30 detik
+        }
+        return false // stop auto-refresh jika fraud sudah selesai
+    },
   });
 
   const { data: timeline = [] } = useQuery({
@@ -208,7 +242,9 @@ export default function ApplicationDetailPage() {
   const status = app.status as AppStatus;
   const canOpen = status === 'PENDING_REVIEW' && isRole('admin', 'operator');
   const canRecommend = status === 'IN_REVIEW' && isRole('admin', 'operator');
-  const canApprove = status === 'RECOMMENDED' && isRole('admin', 'supervisor');
+  const fraudApproved = app.liveness_result?.fraud_status === '003'
+    || app.liveness_result?.fraud_status === '007';
+  const canApprove = status === 'RECOMMENDED' && isRole('admin', 'supervisor') && fraudApproved;
   const canReject = status === 'RECOMMENDED' && isRole('admin', 'supervisor');
   const canAddNote = ['IN_REVIEW', 'RECOMMENDED'].includes(status) && isRole('admin', 'operator', 'supervisor');
 
@@ -488,6 +524,56 @@ export default function ApplicationDetailPage() {
 
                   <Separator />
 
+                  {/* ── Fraud Verification Status ─────────────────────── */}
+                  <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Verifikasi Fraud VIDA</p>
+                      {app.liveness_result?.fraud_status ? (
+                          <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                  {/* Icon berdasarkan status */}
+                                  {app.liveness_result.fraud_status === '003' || app.liveness_result.fraud_status === '007' ? (
+                                      <CheckCircle2 className="w-4 h-4 text-success" />
+                                  ) : app.liveness_result.fraud_status === '004' || app.liveness_result.fraud_status === '006' ? (
+                                      <XCircle className="w-4 h-4 text-destructive" />
+                                  ) : (
+                                      <Loader2 className="w-4 h-4 text-warning animate-spin" />
+                                  )}
+                                  <span className={`text-sm ${FRAUD_STATUS_COLOR[app.liveness_result.fraud_status] ?? 'text-muted-foreground'}`}>
+                                      {FRAUD_STATUS_LABEL[app.liveness_result.fraud_status] ?? app.liveness_result.fraud_status}
+                                  </span>
+                              </div>
+                              {/* Badge status code */}
+                              <Badge variant="outline" className="text-xs font-mono">
+                                  {app.liveness_result.fraud_status}
+                              </Badge>
+                          </div>
+                      ) : (
+                          <p className="text-sm text-muted-foreground">Belum diproses</p>
+                      )}
+
+                      {/* KYC Event ID — hanya tampil jika sudah tersedia */}
+                      {app.liveness_result?.kyc_event_id && (
+                          <div className="mt-2 p-2 bg-muted rounded-md">
+                              <p className="text-xs text-muted-foreground mb-1">KYC Event ID</p>
+                              <p className="text-xs font-mono break-all text-foreground">
+                                  {app.liveness_result.kyc_event_id}
+                              </p>
+                          </div>
+                      )}
+
+                      {/* Warning jika fraud belum selesai dan status RECOMMENDED */}
+                      {status === 'RECOMMENDED'
+                          && app.liveness_result?.fraud_status !== '003'
+                          && app.liveness_result?.fraud_status !== '007' && (
+                          <div className="flex items-start gap-2 p-2 bg-warning/10 rounded-md border border-warning/20">
+                              <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-warning">
+                                  Verifikasi fraud belum selesai. Tombol "Setujui" akan aktif setelah VIDA menyelesaikan review.
+                              </p>
+                          </div>
+                      )}
+                  </div>
+
                   {kycScore !== null && (
                     <div>
                       <div className="flex items-center justify-between mb-2">
@@ -653,6 +739,36 @@ export default function ApplicationDetailPage() {
           )}
         </div>
       </div>
+
+      {/* ── Bukti Transfer ─────────────────────────────────── */}
+      {(app.product_type === 'DEPOSIT' || app.product_type === 'SAVING') && (
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                      <Upload className="w-4 h-4" />
+                      Bukti Transfer
+                  </CardTitle>
+              </CardHeader>
+              <CardContent>
+                  {app.payment_proof_path ? (
+                      <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-success text-sm">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Bukti transfer sudah diupload</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                              {formatDateOnly(app.payment_proof_at)}
+                          </p>
+                          {/* Link download jika perlu */}
+                      </div>
+                  ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                          Nasabah belum mengupload bukti transfer
+                      </p>
+                  )}
+              </CardContent>
+          </Card>
+      )}
 
       {/* ── Dialog ────────────────────────────────────────────────── */}
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && closeDialog()}>

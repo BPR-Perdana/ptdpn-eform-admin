@@ -1,8 +1,6 @@
 /**
  * adminApi.ts
- *
  * Semua API call untuk admin dashboard.
- * Match 1:1 dengan backend admin routes.
  */
 
 import { adminClient } from './client';
@@ -20,6 +18,7 @@ export type AppStatus =
     | 'PENDING_REVIEW'
     | 'IN_REVIEW'
     | 'RECOMMENDED'
+    | 'FRAUD_REJECTED'   // ← baru
     | 'APPROVED'
     | 'REJECTED'
     | 'SIGNING'
@@ -28,6 +27,120 @@ export type AppStatus =
 
 export type ProductType = 'SAVING' | 'DEPOSIT' | 'LOAN';
 
+// ── Fraud status codes dari VIDA ──────────────────────────────────────────────
+// '001' = in progress
+// '002' = submitted for manual review (menunggu)
+// '003' = approved, certificate issued → kyc_event_id tersedia
+// '004' = rejected by manual review
+// '006' = certificate not issued
+// '007' = certificate issued
+export type FraudStatus = '001' | '002' | '003' | '004' | '006' | '007';
+
+// ── OCR Result ────────────────────────────────────────────────────────────────
+export interface OCRResult {
+    id: string;
+    application_id: string;
+    nik: string | null;
+    full_name: string | null;
+    birth_place: string | null;
+    birth_date: string | null;
+    gender: string | null;
+    address: string | null;
+    kelurahan: string | null;
+    kecamatan: string | null;
+    kabupaten_kota: string | null;
+    provinsi: string | null;
+    religion: string | null;
+    marital_status: string | null;
+    occupation: string | null;
+    nationality: string | null;
+    confidence_score: number | null;
+    ktp_image_path: string | null;
+}
+
+// ── Liveness Result ───────────────────────────────────────────────────────────
+export interface LivenessResult {
+    id: string;
+    application_id: string;
+    vida_request_id: string;
+    liveness_status: string        // 'PASSED' | 'FAILED'
+    liveness_score: number | null;
+    face_match_status: string | null;  // 'MATCHED' | 'NOT_MATCHED'
+    face_match_score: number | null;
+    // ── Fraud verification (Sprint B) ─────────────────────────────────────────
+    fraud_status: FraudStatus;     // status dari VIDA fraud polling
+    kyc_event_id: string | null;   // tersedia saat fraud_status = '003' atau '007'
+    selfie_image_path: string | null;
+}
+
+// ── Disbursement Data ─────────────────────────────────────────────────────────
+export interface DisbursementData {
+    id: string;
+    bank_name: string;
+    bank_code: string;
+    account_number: string;
+    account_holder: string;
+}
+
+// ── Product Details ───────────────────────────────────────────────────────────
+export interface SavingDetail {
+    product_name: string;
+    initial_deposit: number;
+    source_of_funds: string;
+    saving_purpose: string;
+}
+
+export interface DepositDetail {
+    product_name: string;
+    placement_amount: number;
+    tenor_months: number;
+    interest_rate: string | null;
+    rollover_type: string;
+    source_of_funds: string;
+    investment_purpose: string | null;
+}
+
+export interface LoanDetail {
+    product_name: string;
+    requested_amount: number;
+    tenor_months: number;
+    loan_purpose: string;
+    payment_source: string;
+    source_of_funds: string;
+}
+
+// ── Contract Document ─────────────────────────────────────────────────────────
+export interface ContractDocument {
+    id: string;
+    document_type: 'SAVING' | 'DEPOSIT' | 'LOAN';
+    sign_status: 'PENDING' | 'SIGNING' | 'COMPLETED' | 'FAILED' | 'EXPIRED';
+    sign_link: string | null;
+    sign_link_sent_at: string | null;
+    sign_deadline: string | null;
+    signed_at: string | null;
+    emeterai_applied_at: string | null;
+    generated_at: string;
+}
+
+// ── Customer (di dalam ApplicationDetail) ─────────────────────────────────────
+export interface CustomerDetail {
+    id: string;
+    full_name: string | null;
+    nik: string | null;
+    phone_number: string | null;
+    phone_number_wa: string | null;
+    email: string | null;
+    phone_verified: boolean;
+    phone_verified_at: string | null;
+    education: string | null;
+    occupation: string | null;
+    monthly_income: number | null;
+    mothers_maiden_name: string | null;
+    work_address: string | null;
+    work_duration: string | null;
+}
+
+// ── Application List Item ─────────────────────────────────────────────────────
 export interface ApplicationListItem {
     id: string;
     product_type: ProductType;
@@ -44,16 +157,20 @@ export interface ApplicationListItem {
     };
 }
 
-export interface ContractDocument {
-    id: string;
-    document_type: 'SAVING' | 'DEPOSIT' | 'LOAN';
-    sign_status: 'PENDING' | 'SIGNING' | 'COMPLETED' | 'FAILED' | 'EXPIRED';
-    sign_link: string | null;
-    sign_link_sent_at: string | null;
-    sign_deadline: string | null;
-    signed_at: string | null;
-    emeterai_applied_at: string | null;
-    generated_at: string;
+// ── Application Detail (full) ─────────────────────────────────────────────────
+export interface ApplicationDetail extends ApplicationListItem {
+    customer: CustomerDetail;
+    ocr_result: OCRResult | null;
+    liveness_result: LivenessResult | null;
+    disbursement_data: DisbursementData | null;
+    collateral_items: any[];
+    deposit_detail: DepositDetail | null;
+    saving_detail: SavingDetail | null;
+    loan_detail: LoanDetail | null;
+    contract_document: ContractDocument | null;  // note: singular, bukan array
+    payment_proof_path: string | null;
+    payment_proof_at:   string | null;
+    updated_at: string;
 }
 
 export interface SystemConfig {
@@ -63,19 +180,6 @@ export interface SystemConfig {
     is_public: boolean;
     updated_by: string | null;
     updated_at: string;
-}
-
-export interface ApplicationDetail extends ApplicationListItem {
-    ocr_result: any | null;
-    liveness_result: any | null;
-    disbursement_data: any | null;
-    collateral_items: any[];
-    deposit_detail: any | null;
-    saving_detail: any | null;
-    loan_detail: any | null;
-    audit_logs: AuditLog[];
-    notes: ApplicationNote[];
-    contract_documents: ContractDocument | null;
 }
 
 export interface AuditLog {
@@ -101,7 +205,6 @@ export interface ApplicationNote {
 
 export type DashboardStats = Record<string, number>;
 
-
 export interface AdminUser {
     id: string;
     name: string;
@@ -110,7 +213,6 @@ export interface AdminUser {
     is_active: boolean;
     created_at: string;
 }
-
 
 export const ROLE_ID_MAP: Record<AdminUser['role'], number> = {
     admin: 1,
@@ -123,7 +225,7 @@ export interface ListApplicationsParams {
     per_page?: number;
     status?: AppStatus;
     product_type?: ProductType;
-    search?: string;        // search by NIK atau nama
+    search?: string;
     date_from?: string;
     date_to?: string;
 }
@@ -136,10 +238,20 @@ export interface PaginatedResponse<T> {
     total_pages: number;
 }
 
+export interface ReviewAction {
+    id: string;
+    application_id: string;
+    actor_id: string;
+    actor_username: string;
+    actor_role: 'admin' | 'supervisor' | 'operator';
+    action: 'OPENED' | 'RECOMMENDED' | 'APPROVED' | 'REJECTED' | 'NOTE_ADDED' | 'REOPENED';
+    notes: string | null;
+    created_at: string;
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-    // Backend returns: { success, message, data: { stats: {...} } }
     const res = await adminClient.get<ApiResponse<{ stats: DashboardStats }>>('/admin/dashboard/stats');
     return res.data.data.stats;
 }
@@ -150,7 +262,7 @@ export async function listApplications(
     params?: ListApplicationsParams
 ): Promise<PaginatedResponse<ApplicationListItem>> {
     const res = await adminClient.get<ApiResponse<{
-        applications: ApplicationListItem[]; // ← backend pakai 'applications', bukan 'data'
+        applications: ApplicationListItem[];
         total: number;
         page: number;
         per_page: number;
@@ -159,14 +271,12 @@ export async function listApplications(
 
     const raw = res.data.data;
     return {
-        data: raw.applications, // ← normalize ke 'data' supaya konsisten
+        data: raw.applications,
         total: raw.total,
         page: raw.page,
         per_page: raw.per_page,
         total_pages: raw.total_pages,
     };
-
-
 }
 
 export function getKTPImageUrl(appId: string): string {
@@ -201,11 +311,11 @@ export async function approveApplication(id: string, notes?: string): Promise<vo
 }
 
 export async function rejectApplication(id: string, notes: string): Promise<void> {
-    await adminClient.patch(`/admin/applications/${id}/reject`, { notes }); // ← fix
+    await adminClient.patch(`/admin/applications/${id}/reject`, { notes });
 }
 
 export async function addNote(id: string, notes: string): Promise<void> {
-    await adminClient.post(`/admin/applications/${id}/notes`, { notes }); // ← fix
+    await adminClient.post(`/admin/applications/${id}/notes`, { notes });
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -221,7 +331,7 @@ export async function listUsers(): Promise<PaginatedResponse<AdminUser>> {
 
     const raw = res.data.data;
     return {
-        data: raw.users, // ← normalize
+        data: raw.users,
         total: raw.total,
         page: raw.page,
         per_page: raw.per_page,
@@ -241,7 +351,7 @@ export async function createUser(payload: {
         full_name: payload.full_name,
         email: payload.email,
         password: payload.password,
-        role_id: ROLE_ID_MAP[payload.role], // ← string 'operator' → number 3
+        role_id: ROLE_ID_MAP[payload.role],
     });
     return res.data.data;
 }
@@ -272,7 +382,7 @@ export async function listAuditLogs(params?: {
 
     const raw = res.data.data;
     return {
-        data: raw.logs, // ← normalize
+        data: raw.logs,
         total: raw.total,
         page: raw.page,
         per_page: raw.per_page,
@@ -289,17 +399,6 @@ export async function listConfig(): Promise<SystemConfig[]> {
 
 export async function updateConfig(key: string, value: string): Promise<void> {
     await adminClient.patch(`/admin/config/${key}`, { value });
-}
-
-export interface ReviewAction {
-    id: string;
-    application_id: string;
-    actor_id: string;
-    actor_username: string;
-    actor_role: 'admin' | 'supervisor' | 'operator';
-    action: 'OPENED' | 'RECOMMENDED' | 'APPROVED' | 'REJECTED' | 'NOTE_ADDED' | 'REOPENED';
-    notes: string | null;
-    created_at: string;
 }
 
 export async function getApplicationTimeline(id: string): Promise<ReviewAction[]> {
