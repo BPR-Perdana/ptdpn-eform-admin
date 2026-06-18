@@ -137,6 +137,7 @@ export interface CustomerDetail {
     monthly_income: number | null;
     mothers_maiden_name: string | null;
     work_address: string | null;
+    current_address: string | null;
     work_duration: string | null;
 }
 
@@ -207,7 +208,8 @@ export type DashboardStats = Record<string, number>;
 
 export interface AdminUser {
     id: string;
-    name: string;
+    username: string;
+    full_name: string;
     email: string;
     role: 'admin' | 'supervisor' | 'operator';
     is_active: boolean;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -69,7 +69,7 @@ export default function AuditLogsPage() {
       action: actionFilter !== 'ALL' ? actionFilter : undefined,
       actor_id: debouncedActor || undefined,
     }),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const logs = data?.data ?? [];

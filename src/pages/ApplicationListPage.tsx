@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -109,7 +109,7 @@ export default function ApplicationListPage() {
             status: status !== 'ALL' ? status : undefined,
             product_type: product !== 'ALL' ? product : undefined,
         }),
-        keepPreviousData: true,
+        placeholderData: keepPreviousData,
     });
 
     const items = data?.data ?? [];

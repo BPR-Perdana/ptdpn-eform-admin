@@ -186,8 +186,8 @@ export default function ApplicationDetailPage() {
     queryKey: ['application', id],
     queryFn: () => getApplicationDetail(id!),
     enabled: !!id,
-    refetchInterval: (data) => {
-        const fraudStatus = data?.liveness_result?.fraud_status
+    refetchInterval: (query) => {
+        const fraudStatus = query.state.data?.liveness_result?.fraud_status
         if (fraudStatus === '001' || fraudStatus === '002') {
             return 30_000 // refresh tiap 30 detik
         }
